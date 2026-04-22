@@ -5,19 +5,23 @@ import (
 	"time"
 )
 
-func sayHello(name string) {
-	time.Sleep(1 * time.Second)
-	fmt.Println("Hello", name)
+// This is like a Laravel Job class
+func processOrder(orderID int, result chan<- string) {
+	time.Sleep(1 * time.Second) // Simulate work
+	result <- fmt.Sprintf("Order %d processed!", orderID)
 }
 
 func main() {
-	// Regular function call (blocking)
-	sayHello("Ali") // Takes 1 second
+	// Channel for results
+	results := make(chan string, 3)
 
-	// Goroutine (non-blocking)
-	go sayHello("Bilal") // Runs in background
-	go sayHello("Saleem")
+	// Dispatch 3 jobs (like dispatching Laravel jobs)
+	go processOrder(101, results)
+	go processOrder(102, results)
+	go processOrder(103, results)
 
-	time.Sleep(2 * time.Second) // Wait for goroutines to finish
-	fmt.Println("Done")
+	// Wait for all results
+	for i := 0; i < 3; i++ {
+		fmt.Println(<-results)
+	}
 }
