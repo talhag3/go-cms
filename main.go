@@ -5,23 +5,33 @@ import (
 	"time"
 )
 
-// This is like a Laravel Job class
-func processOrder(orderID int, result chan<- string) {
-	time.Sleep(1 * time.Second) // Simulate work
-	result <- fmt.Sprintf("Order %d processed!", orderID)
+func worker(id int, jobs <-chan int, results chan<- int) {
+	// This loops until jobs channel is closed AND empty
+	for job := range jobs {
+		time.Sleep(1 * time.Second)
+		fmt.Printf("Worker %d processing job %d\n", id, job)
+		results <- job * 2 // Send result back (blocks if results is full)
+	}
 }
 
 func main() {
-	// Channel for results
-	results := make(chan string, 3)
+	jobs := make(chan int, 5)    // Buffered pipe (can hold 5 items)
+	results := make(chan int, 5) // Buffered pipe (can hold 5 items)
 
-	// Dispatch 3 jobs (like dispatching Laravel jobs)
-	go processOrder(101, results)
-	go processOrder(102, results)
-	go processOrder(103, results)
+	// Start 3 workers (goroutines)
+	for w := 1; w <= 3; w++ {
+		go worker(w, jobs, results)
+	}
 
-	// Wait for all results
-	for i := 0; i < 3; i++ {
-		fmt.Println(<-results)
+	// Send 5 jobs (fills the buffer)
+	for j := 1; j <= 5; j++ {
+		jobs <- j // Send to pipe (blocks if buffer full)
+	}
+
+	close(jobs) // Signal: "No more jobs coming"
+
+	// Read 5 results (must match number of jobs sent)
+	for a := 1; a <= 5; a++ {
+		fmt.Println("Result:", <-results) // Blocks until result available
 	}
 }
