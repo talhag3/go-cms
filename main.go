@@ -1,17 +1,24 @@
-// Send one value through channel
+// Practice  Send multiple values
 
 package main
 
-import (
-	"fmt"
-)
+import "fmt"
 
 func main() {
-	messageCh := make(chan string)
 
-	go func(message chan<- string) {
-		message <- "Hi Talha"
-	}(messageCh)
+	myChan := make(chan int)
 
-	fmt.Println(<-messageCh)
+	go func(dataChan chan<- int) {
+
+		for i := 1; i < 6; i++ {
+			dataChan <- i
+		}
+
+	}(myChan)
+
+	for i := 1; i < 6; i++ {
+		fmt.Println(<-myChan)
+	}
+
+	fmt.Println("End Program")
 }
