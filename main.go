@@ -1,35 +1,17 @@
+// Send one value through channel
+
 package main
 
 import (
 	"fmt"
-	"sync"
-	"time"
 )
 
 func main() {
-	var wg sync.WaitGroup
+	messageCh := make(chan string)
 
-	wg.Add(2)
+	go func(message chan<- string) {
+		message <- "Hi Talha"
+	}(messageCh)
 
-	go func() {
-		defer wg.Done()
-
-		for i := 1; i < 6; i++ {
-			fmt.Println("hello")
-			time.Sleep(2 * time.Millisecond)
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-
-		for i := 1; i < 6; i++ {
-			fmt.Println("world")
-			time.Sleep(2 * time.Millisecond)
-		}
-	}()
-
-	wg.Wait()
-
-	fmt.Println("all goroutines finished")
+	fmt.Println(<-messageCh)
 }
