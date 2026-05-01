@@ -1,74 +1,39 @@
+/* Create a goroutine that prints "working..."
+every 500 milliseconds in an infinite loop. In your main function,
+ let it run for exactly 2 seconds, then stop it.
+ The program should exit cleanly without printing anything after it stops.
+*/
+
 package main
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
 
 func main() {
-	// ============================================
-	// 1️ CREATE A BUFFERED CHANNEL (capacity = 5)
-	//    - Can hold up to 5 integers without blocking sender
-	//    - Buffered = sender can send N values before blocking
-	// ============================================
-	ch := make(chan int, 5)
 
-	// ============================================
-	// 2️ LAUNCH PRODUCER GOROUTINE
-	//    - Sends numbers 1-5 with 1-second delays
-	//    - Closes channel when done (signals EOF)
-	// ============================================
-	go func(_ch chan<- int) {
-		// Send numbers 1 through 5
-		for i := 1; i <= 5; i++ {
-			time.Sleep(1 * time.Second) // Simulate work/delay
-			ch <- i                     // Send value into channel
-			fmt.Printf("[Sender] Sent: %d\n", i)
-		}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go func(ctx context.Context) {
 
-		// 🔚 CLOSE THE CHANNEL (important!)
-		// - Signals receivers: "no more data"
-		// - Future receives return (value, false)
-		// - Channel cannot be re-used after closing
-		close(_ch)
-		fmt.Println("[Sender] Channel closed")
-	}(ch) // Pass ch as argument to goroutine
-
-	// ============================================
-	// 3️ CONSUMER LOOP: Receive Until Channel Closes
-	//    Uses labeled break to exit outer for-loop
-	// ============================================
-
-outerLoop: // ← LABEL for the for loop (needed to break out of both select AND for)
-	for {
-		select {
-		case value, ok := <-ch:
-			//  TWO-VALUE RECEIVE: value, ok := <-ch
-			//    - value: the received data (or zero-value if closed)
-			//    - ok: true if channel open, false if closed
-
-			if !ok {
-				// Channel is CLOSED!
-				// - No more data will come
-				// - Time to stop receiving
-
-				fmt.Println("\n[Receiver] Channel detected as closed!")
-				fmt.Println("[Receiver] Exiting receiver loop...")
-
-				break outerLoop // ← LABELED BREAK! Exits the FOR loop entirely
-				//   Without label: would only exit select (causing your bug!)
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("Worker stopped!")
+				return
+			case <-time.After(500 * time.Millisecond):
+				fmt.Println("working...")
 			}
-
-			// Channel is OPEN and we got data
-			fmt.Printf("[Receiver] Received: %d\n", value)
-
-			// Note: No timeout case here, so we block waiting for data/close
 		}
-	}
+	}(ctx)
 
-	// ============================================
-	// 4️ AFTER LOOP: Program continues here
-	// ============================================
-	fmt.Println("\n Program completed successfully!")
-	fmt.Println(" All data received, channel was properly closed")
+	time.Sleep(time.Second * 2)
+
+	// Send the stop signal
+	cancel()
+
+	// Give goroutine a moment to print "Worker stopped!"
+	time.Sleep(100 * time.Millisecond)
 }
