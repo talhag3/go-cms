@@ -1,7 +1,7 @@
-/* Create a goroutine that prints "working..."
-every 500 milliseconds in an infinite loop. In your main function,
- let it run for exactly 2 seconds, then stop it.
- The program should exit cleanly without printing anything after it stops.
+/*
+Write a function fetchData(ctx context.Context) string that simulates a slow database query by time.Sleep(3 * time.Second) and
+then returns "Data fetched".
+In main, call fetchData, but enforce a 1-second timeout. Print the result or the error.
 */
 
 package main
@@ -12,28 +12,33 @@ import (
 	"time"
 )
 
+func fetchData(ctx context.Context) (string, error) {
+	resultChan := make(chan string)
+
+	go func() {
+		time.Sleep(3 * time.Second) // Slow query
+		resultChan <- "Data fetched"
+	}()
+
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err() // Returns "context deadline exceeded"
+	case res := <-resultChan:
+		return res, nil
+	}
+}
+
 func main() {
 
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
 	defer cancel()
-	go func(ctx context.Context) {
 
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("Worker stopped!")
-				return
-			case <-time.After(500 * time.Millisecond):
-				fmt.Println("working...")
-			}
-		}
-	}(ctx)
+	fetchData(ctx)
 
-	time.Sleep(time.Second * 2)
-
-	// Send the stop signal
-	cancel()
-
-	// Give goroutine a moment to print "Worker stopped!"
-	time.Sleep(100 * time.Millisecond)
+	result, err := fetchData(ctx)
+	if err != nil {
+		fmt.Printf("Error: %v\n", err)
+	} else {
+		fmt.Println(result)
+	}
 }
