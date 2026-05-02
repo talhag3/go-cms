@@ -1,7 +1,7 @@
 /*
-Write a function fetchData(ctx context.Context) string that simulates a slow database query by time.Sleep(3 * time.Second) and
-then returns "Data fetched".
-In main, call fetchData, but enforce a 1-second timeout. Print the result or the error.
+A flash sale ends at exactly time.Now().Add(2 * time.Second).
+Create a worker that checks the context's deadline, prints how many milliseconds are left, and loops every 500ms.
+It should stop exactly when the sale ends.
 */
 
 package main
@@ -12,33 +12,28 @@ import (
 	"time"
 )
 
-func fetchData(ctx context.Context) (string, error) {
-	resultChan := make(chan string)
-
-	go func() {
-		time.Sleep(3 * time.Second) // Slow query
-		resultChan <- "Data fetched"
-	}()
-
-	select {
-	case <-ctx.Done():
-		return "", ctx.Err() // Returns "context deadline exceeded"
-	case res := <-resultChan:
-		return res, nil
+func FlashSale(ctx context.Context) {
+	for {
+		for {
+			select {
+			case <-ctx.Done():
+				fmt.Println("Sale is OVER!")
+				return
+			case <-time.After(500 * time.Millisecond):
+				deadline, _ := ctx.Deadline()
+				remaining := time.Until(deadline)
+				fmt.Printf("Sale active... %v remaining\n", remaining.Round(time.Millisecond))
+			}
+		}
 	}
 }
 
 func main() {
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*1)
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
 	defer cancel()
 
-	fetchData(ctx)
+	go FlashSale(ctx)
 
-	result, err := fetchData(ctx)
-	if err != nil {
-		fmt.Printf("Error: %v\n", err)
-	} else {
-		fmt.Println(result)
-	}
+	// Wait longer than the sale to see it stop
+	time.Sleep(3 * time.Second)
 }
