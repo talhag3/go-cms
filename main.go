@@ -1,7 +1,6 @@
 /*
-A flash sale ends at exactly time.Now().Add(2 * time.Second).
-Create a worker that checks the context's deadline, prints how many milliseconds are left, and loops every 500ms.
-It should stop exactly when the sale ends.
+Create a context that holds a userID (string) and an agentLevel (int). Pass this context to a function called secretMission.
+The function must extract both values and print: "Agent [userID] executing mission at level [agentLevel]"
 */
 
 package main
@@ -9,31 +8,37 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 )
 
-func FlashSale(ctx context.Context) {
-	for {
-		for {
-			select {
-			case <-ctx.Done():
-				fmt.Println("Sale is OVER!")
-				return
-			case <-time.After(500 * time.Millisecond):
-				deadline, _ := ctx.Deadline()
-				remaining := time.Until(deadline)
-				fmt.Printf("Sale active... %v remaining\n", remaining.Round(time.Millisecond))
-			}
-		}
+// Custom type prevents key collisions
+type contextKey string
+
+const (
+	userIDKey     contextKey = "user_id"
+	agentLevelKey contextKey = "agent_level"
+)
+
+func secretMission(ctx context.Context) {
+	// Extract values safely
+	userID, ok1 := ctx.Value(userIDKey).(string)
+	level, ok2 := ctx.Value(agentLevelKey).(int)
+
+	if !ok1 || !ok2 {
+		fmt.Println("Mission aborted: Missing credentials")
+		return
 	}
+
+	fmt.Printf("Agent %s executing mission at level %d\n", userID, level)
 }
 
 func main() {
-	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(2*time.Second))
-	defer cancel()
 
-	go FlashSale(ctx)
+	ctx := context.Background()
 
-	// Wait longer than the sale to see it stop
-	time.Sleep(3 * time.Second)
+	// Chain values into context
+	ctx = context.WithValue(ctx, userIDKey, "James Bond")
+	ctx = context.WithValue(ctx, agentLevelKey, 7)
+
+	secretMission(ctx)
+	// time.Sleep(time.Second * 2)
 }
