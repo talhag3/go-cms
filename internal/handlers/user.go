@@ -1,53 +1,53 @@
-// internal/handlers/user.go
 package handlers
 
 import (
 	"strconv"
 
+	"github.com/talhag3/go-cms/pkg/response"
+
 	"github.com/talhag3/go-cms/internal/models"
 	"github.com/talhag3/go-cms/internal/services"
-	"github.com/talhag3/go-cms/pkg/response"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// UserHandler handles HTTP requests for users
 type UserHandler struct {
 	userService *services.UserService
 }
 
-// NewUserHandler creates a new UserHandler
 func NewUserHandler(userService *services.UserService) *UserHandler {
 	return &UserHandler{
 		userService: userService,
 	}
 }
 
-// GetAll handles GET /api/v1/users
 func (h *UserHandler) GetAll(c *fiber.Ctx) error {
-	users, err := h.userService.GetAllUsers()
+	ctx := c.Context()
+	users, err := h.userService.GetAllUsers(ctx)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch users")
 	}
 	return response.Success(c, users)
 }
 
-// GetByID handles GET /api/v1/users/:id
 func (h *UserHandler) GetByID(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid user ID")
 	}
 
-	user, err := h.userService.GetUserByID(uint(id))
+	user, err := h.userService.GetUserByID(ctx, uint(id))
 	if err != nil {
 		return response.Error(c, fiber.StatusNotFound, "User not found")
 	}
 	return response.Success(c, user)
 }
 
-// Create handles POST /api/v1/users
 func (h *UserHandler) Create(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	var req models.CreateUserRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid request body")
@@ -57,7 +57,7 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 		return response.ValidationError(c, errs)
 	}
 
-	user, err := h.userService.CreateUser(req)
+	user, err := h.userService.CreateUser(ctx, req)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -65,8 +65,9 @@ func (h *UserHandler) Create(c *fiber.Ctx) error {
 	return response.SuccessWithMessage(c, "User created successfully", user)
 }
 
-// Login handles POST /api/v1/auth/login
 func (h *UserHandler) Login(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	var req models.LoginRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid request body")
@@ -83,7 +84,7 @@ func (h *UserHandler) Login(c *fiber.Ctx) error {
 		return response.ValidationError(c, errs)
 	}
 
-	result, err := h.userService.Login(req)
+	result, err := h.userService.Login(ctx, req)
 	if err != nil {
 		return response.Error(c, fiber.StatusUnauthorized, "Invalid credentials")
 	}
@@ -91,14 +92,15 @@ func (h *UserHandler) Login(c *fiber.Ctx) error {
 	return response.SuccessWithMessage(c, "Login successful", result)
 }
 
-// Delete handles DELETE /api/v1/users/:id
 func (h *UserHandler) Delete(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid user ID")
 	}
 
-	if err := h.userService.DeleteUser(uint(id)); err != nil {
+	if err := h.userService.DeleteUser(ctx, uint(id)); err != nil {
 		return response.Error(c, fiber.StatusNotFound, "User not found")
 	}
 

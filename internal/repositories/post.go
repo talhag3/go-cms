@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"strings"
 	"sync"
@@ -10,13 +11,13 @@ import (
 )
 
 type PostRepository interface {
-	GetAll(page, perPage int, status string) ([]models.Post, int64, error)
-	GetByID(id uint) (*models.Post, error)
-	GetBySlug(slug string) (*models.Post, error)
-	Create(post *models.Post) error
-	Update(post *models.Post) error
-	Delete(id uint) error
-	GetByAuthor(authorID uint) ([]models.Post, error)
+	GetAll(ctx context.Context, page, perPage int, status string) ([]models.Post, int64, error)
+	GetByID(ctx context.Context, id uint) (*models.Post, error)
+	GetBySlug(ctx context.Context, slug string) (*models.Post, error)
+	Create(ctx context.Context, post *models.Post) error
+	Update(ctx context.Context, post *models.Post) error
+	Delete(ctx context.Context, id uint) error
+	GetByAuthor(ctx context.Context, authorID uint) ([]models.Post, error)
 }
 
 type MockPostRepository struct {

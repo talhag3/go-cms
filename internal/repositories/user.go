@@ -1,6 +1,7 @@
 package repositories
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"time"
@@ -10,13 +11,13 @@ import (
 
 // UserRepository defines user data operations
 type UserRepository interface {
-	GetByID(id uint) (*models.User, error)
-	GetByEmail(email string) (*models.User, error)
-	GetAll() ([]models.User, error)
-	Create(user *models.User) error
-	Update(user *models.User) error
-	Delete(id uint) error
-	Authenticate(email, password string) (*models.User, error)
+	GetByID(ctx context.Context, id uint) (*models.User, error)
+	GetByEmail(ctx context.Context, email string) (*models.User, error)
+	GetAll(ctx context.Context) ([]models.User, error)
+	Create(ctx context.Context, user *models.User) error
+	Update(ctx context.Context, user *models.User) error
+	Delete(ctx context.Context, id uint) error
+	Authenticate(ctx context.Context, email, password string) (*models.User, error)
 }
 
 // MockUserRepository implements UserRepository with in-memory storage

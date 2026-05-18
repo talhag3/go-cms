@@ -1,30 +1,18 @@
 package services
 
 import (
+	"context"
 	"math"
 
 	"github.com/talhag3/go-cms/internal/models"
 	"github.com/talhag3/go-cms/internal/repositories"
 )
 
-// PostService handles business logic for posts
-//
-// GO CONCEPT - DEPENDENCY INJECTION:
-// The service receives its dependencies through the constructor
-// This makes the code TESTABLE and DECOUPLED
-//
-// In PHP (Laravel): The service container does this automatically
-//
-//	public function __construct(PostRepository $postRepo)
-//
-// In Go: We do it explicitly (manual DI)
 type PostService struct {
-	postRepo repositories.PostRepository // Interface, not concrete type!
+	postRepo repositories.PostRepository
 	userRepo repositories.UserRepository
 }
 
-// NewPostService creates a new PostService with its dependencies
-// This is the CONSTRUCTOR
 func NewPostService(postRepo repositories.PostRepository, userRepo repositories.UserRepository) *PostService {
 	return &PostService{
 		postRepo: postRepo,
@@ -32,9 +20,9 @@ func NewPostService(postRepo repositories.PostRepository, userRepo repositories.
 	}
 }
 
-// GetAllPosts returns paginated posts with enriched author data
-func (s *PostService) GetAllPosts(page, perPage int, status string) (*models.PaginatedResponse[models.Post], error) {
-	// Set defaults
+// NOTE: All methods now accept context.Context as first parameter
+
+func (s *PostService) GetAllPosts(ctx context.Context, page, perPage int, status string) (*models.PaginatedResponse[models.Post], error) {
 	if page < 1 {
 		page = 1
 	}
@@ -45,16 +33,14 @@ func (s *PostService) GetAllPosts(page, perPage int, status string) (*models.Pag
 		perPage = 100
 	}
 
-	posts, total, err := s.postRepo.GetAll(page, perPage, status)
+	posts, total, err := s.postRepo.GetAll(ctx, page, perPage, status)
 	if err != nil {
 		return nil, err
 	}
 
-	// Enrich posts with author data
-	// In PHP: $post->load('author') or eager loading
 	for i := range posts {
 		if posts[i].AuthorID > 0 {
-			author, err := s.userRepo.GetByID(posts[i].AuthorID)
+			author, err := s.userRepo.GetByID(ctx, posts[i].AuthorID)
 			if err == nil {
 				posts[i].Author = author
 			}
@@ -72,16 +58,14 @@ func (s *PostService) GetAllPosts(page, perPage int, status string) (*models.Pag
 	}, nil
 }
 
-// GetPostByID returns a single post by ID
-func (s *PostService) GetPostByID(id uint) (*models.Post, error) {
-	post, err := s.postRepo.GetByID(id)
+func (s *PostService) GetPostByID(ctx context.Context, id uint) (*models.Post, error) {
+	post, err := s.postRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Enrich with author
 	if post.AuthorID > 0 {
-		author, err := s.userRepo.GetByID(post.AuthorID)
+		author, err := s.userRepo.GetByID(ctx, post.AuthorID)
 		if err == nil {
 			post.Author = author
 		}
@@ -90,15 +74,14 @@ func (s *PostService) GetPostByID(id uint) (*models.Post, error) {
 	return post, nil
 }
 
-// GetPostBySlug returns a post by its slug
-func (s *PostService) GetPostBySlug(slug string) (*models.Post, error) {
-	post, err := s.postRepo.GetBySlug(slug)
+func (s *PostService) GetPostBySlug(ctx context.Context, slug string) (*models.Post, error) {
+	post, err := s.postRepo.GetBySlug(ctx, slug)
 	if err != nil {
 		return nil, err
 	}
 
 	if post.AuthorID > 0 {
-		author, err := s.userRepo.GetByID(post.AuthorID)
+		author, err := s.userRepo.GetByID(ctx, post.AuthorID)
 		if err == nil {
 			post.Author = author
 		}
@@ -107,9 +90,7 @@ func (s *PostService) GetPostBySlug(slug string) (*models.Post, error) {
 	return post, nil
 }
 
-// CreatePost creates a new post with business validation
-func (s *PostService) CreatePost(req models.CreatePostRequest, authorID uint) (*models.Post, error) {
-	// Business logic: set default status
+func (s *PostService) CreatePost(ctx context.Context, req models.CreatePostRequest, authorID uint) (*models.Post, error) {
 	status := req.Status
 	if status == "" {
 		status = "draft"
@@ -125,38 +106,27 @@ func (s *PostService) CreatePost(req models.CreatePostRequest, authorID uint) (*
 		Tags:     req.Tags,
 	}
 
-	// Handle nil tags
 	if post.Tags == nil {
 		post.Tags = []string{}
 	}
 
-	err := s.postRepo.Create(post)
+	err := s.postRepo.Create(ctx, post)
 	if err != nil {
 		return nil, err
 	}
 
-	// Return created post with author
-	author, _ := s.userRepo.GetByID(authorID)
+	author, _ := s.userRepo.GetByID(ctx, authorID)
 	post.Author = author
 
 	return post, nil
 }
 
-// UpdatePost updates an existing post (partial update)
-//
-// GO CONCEPT - DEREFERENCING POINTERS:
-// When you have *string and want the string value, use *ptr
-// if req.Title != nil { post.Title = *req.Title }
-// In PHP: if ($req->title !== null) { $post->title = $req->title; }
-func (s *PostService) UpdatePost(id uint, req models.UpdatePostRequest) (*models.Post, error) {
-	// Fetch existing post first
-	post, err := s.postRepo.GetByID(id)
+func (s *PostService) UpdatePost(ctx context.Context, id uint, req models.UpdatePostRequest) (*models.Post, error) {
+	post, err := s.postRepo.GetByID(ctx, id)
 	if err != nil {
 		return nil, err
 	}
 
-	// Partial update - only update provided fields
-	// In PHP: $post->fill($request->only(['title', 'content']))
 	if req.Title != nil {
 		post.Title = *req.Title
 		post.Slug = repositories.GenerateSlug(*req.Title)
@@ -174,14 +144,13 @@ func (s *PostService) UpdatePost(id uint, req models.UpdatePostRequest) (*models
 		post.Tags = req.Tags
 	}
 
-	err = s.postRepo.Update(post)
+	err = s.postRepo.Update(ctx, post)
 	if err != nil {
 		return nil, err
 	}
 
-	// Enrich with author
 	if post.AuthorID > 0 {
-		author, err := s.userRepo.GetByID(post.AuthorID)
+		author, err := s.userRepo.GetByID(ctx, post.AuthorID)
 		if err == nil {
 			post.Author = author
 		}
@@ -190,23 +159,21 @@ func (s *PostService) UpdatePost(id uint, req models.UpdatePostRequest) (*models
 	return post, nil
 }
 
-// DeletePost removes a post
-func (s *PostService) DeletePost(id uint) error {
-	_, err := s.postRepo.GetByID(id)
+func (s *PostService) DeletePost(ctx context.Context, id uint) error {
+	_, err := s.postRepo.GetByID(ctx, id)
 	if err != nil {
 		return err
 	}
-	return s.postRepo.Delete(id)
+	return s.postRepo.Delete(ctx, id)
 }
 
-// GetPostsByAuthor returns all posts by a specific author
-func (s *PostService) GetPostsByAuthor(authorID uint) ([]models.Post, error) {
-	posts, err := s.postRepo.GetByAuthor(authorID)
+func (s *PostService) GetPostsByAuthor(ctx context.Context, authorID uint) ([]models.Post, error) {
+	posts, err := s.postRepo.GetByAuthor(ctx, authorID)
 	if err != nil {
 		return nil, err
 	}
 
-	author, err := s.userRepo.GetByID(authorID)
+	author, err := s.userRepo.GetByID(ctx, authorID)
 	for i := range posts {
 		if err == nil {
 			posts[i].Author = author

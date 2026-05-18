@@ -11,33 +11,39 @@ import (
 	"github.com/gofiber/fiber/v2"
 )
 
-// PostHandler handles HTTP requests for posts
-// In PHP: This is like app/Http/Controllers/PostController.php
-//
-// GO CONCEPT - STRUCT AS CONTAINER:
-// We store the service as a struct field
-// In PHP: The service is injected via constructor
 type PostHandler struct {
 	postService *services.PostService
 }
 
-// NewPostHandler creates a new PostHandler with dependency injection
 func NewPostHandler(postService *services.PostService) *PostHandler {
 	return &PostHandler{
 		postService: postService,
 	}
 }
 
-// GetAll handles GET /api/v1/posts
-// In PHP: public function index(Request $request) { ... }
+// ═══════════════════════════════════════════════════════════════════════════
+// GO CONCEPT - FIBER CONTEXT TO STANDARD CONTEXT:
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// Fiber uses its own *fiber.Ctx (different from standard context.Context)
+// pgx needs standard context.Context
+//
+// c.Context() converts Fiber context to standard context
+// This allows request cancellation to propagate to database queries!
+//
+// PHP: No equivalent (each request is isolated)
+// Go: Context carries cancellation from HTTP request to DB query
+//
+// Example: If client disconnects mid-request, the DB query gets cancelled
+// This saves resources on your database!
 func (h *PostHandler) GetAll(c *fiber.Ctx) error {
-	// Parse query parameters
-	// In PHP: $request->query('page', 1)
+	ctx := c.Context() // Convert to standard context
+
 	page, _ := strconv.Atoi(c.Query("page", "1"))
 	perPage, _ := strconv.Atoi(c.Query("per_page", "10"))
 	status := c.Query("status", "")
 
-	result, err := h.postService.GetAllPosts(page, perPage, status)
+	result, err := h.postService.GetAllPosts(ctx, page, perPage, status)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch posts")
 	}
@@ -45,16 +51,15 @@ func (h *PostHandler) GetAll(c *fiber.Ctx) error {
 	return response.Paginated(c, result.Data, result.Total, result.Page, result.PerPage, result.TotalPages)
 }
 
-// GetByID handles GET /api/v1/posts/:id
 func (h *PostHandler) GetByID(c *fiber.Ctx) error {
-	// Parse URL parameter
-	// In PHP: $request->route('id')
+	ctx := c.Context()
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid post ID")
 	}
 
-	post, err := h.postService.GetPostByID(uint(id))
+	post, err := h.postService.GetPostByID(ctx, uint(id))
 	if err != nil {
 		return response.Error(c, fiber.StatusNotFound, "Post not found")
 	}
@@ -62,14 +67,15 @@ func (h *PostHandler) GetByID(c *fiber.Ctx) error {
 	return response.Success(c, post)
 }
 
-// GetBySlug handles GET /api/v1/posts/slug/:slug
 func (h *PostHandler) GetBySlug(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	slug := c.Params("slug")
 	if slug == "" {
 		return response.Error(c, fiber.StatusBadRequest, "Slug is required")
 	}
 
-	post, err := h.postService.GetPostBySlug(slug)
+	post, err := h.postService.GetPostBySlug(ctx, slug)
 	if err != nil {
 		return response.Error(c, fiber.StatusNotFound, "Post not found")
 	}
@@ -77,29 +83,24 @@ func (h *PostHandler) GetBySlug(c *fiber.Ctx) error {
 	return response.Success(c, post)
 }
 
-// Create handles POST /api/v1/posts
 func (h *PostHandler) Create(c *fiber.Ctx) error {
-	// Parse request body into struct
-	// In PHP: $request->validate([...]) or $request->all()
+	ctx := c.Context()
+
 	var req models.CreatePostRequest
 	if err := c.BodyParser(&req); err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid request body")
 	}
 
-	// Validate input
 	if errs := validateCreatePostRequest(req); len(errs) > 0 {
 		return response.ValidationError(c, errs)
 	}
 
-	// Get user ID from context (set by Auth middleware)
-	// In PHP: auth()->id()
 	userID, ok := c.Locals("userID").(uint)
 	if !ok {
-		// Default to user 1 if no auth (for demo purposes)
 		userID = 1
 	}
 
-	post, err := h.postService.CreatePost(req, userID)
+	post, err := h.postService.CreatePost(ctx, req, userID)
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, err.Error())
 	}
@@ -107,8 +108,9 @@ func (h *PostHandler) Create(c *fiber.Ctx) error {
 	return response.SuccessWithMessage(c, "Post created successfully", post)
 }
 
-// Update handles PUT /api/v1/posts/:id
 func (h *PostHandler) Update(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid post ID")
@@ -123,7 +125,7 @@ func (h *PostHandler) Update(c *fiber.Ctx) error {
 		return response.ValidationError(c, errs)
 	}
 
-	post, err := h.postService.UpdatePost(uint(id), req)
+	post, err := h.postService.UpdatePost(ctx, uint(id), req)
 	if err != nil {
 		if err.Error() == "post not found" {
 			return response.Error(c, fiber.StatusNotFound, "Post not found")
@@ -134,14 +136,15 @@ func (h *PostHandler) Update(c *fiber.Ctx) error {
 	return response.SuccessWithMessage(c, "Post updated successfully", post)
 }
 
-// Delete handles DELETE /api/v1/posts/:id
 func (h *PostHandler) Delete(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	id, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid post ID")
 	}
 
-	if err := h.postService.DeletePost(uint(id)); err != nil {
+	if err := h.postService.DeletePost(ctx, uint(id)); err != nil {
 		if err.Error() == "post not found" {
 			return response.Error(c, fiber.StatusNotFound, "Post not found")
 		}
@@ -151,23 +154,21 @@ func (h *PostHandler) Delete(c *fiber.Ctx) error {
 	return response.SuccessWithMessage(c, "Post deleted successfully", nil)
 }
 
-// GetByAuthor handles GET /api/v1/posts/author/:id
 func (h *PostHandler) GetByAuthor(c *fiber.Ctx) error {
+	ctx := c.Context()
+
 	authorID, err := strconv.ParseUint(c.Params("id"), 10, 32)
 	if err != nil {
 		return response.Error(c, fiber.StatusBadRequest, "Invalid author ID")
 	}
 
-	posts, err := h.postService.GetPostsByAuthor(uint(authorID))
+	posts, err := h.postService.GetPostsByAuthor(ctx, uint(authorID))
 	if err != nil {
 		return response.Error(c, fiber.StatusInternalServerError, "Failed to fetch posts")
 	}
 
 	return response.Success(c, posts)
 }
-
-// --- Validation Helpers ---
-// In production, use a library like go-playground/validator
 
 func validateCreatePostRequest(req models.CreatePostRequest) []string {
 	var errs []string
